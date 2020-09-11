@@ -23,11 +23,7 @@ export default StyleSheet.create({
 	sortToggleText: {
 		fontSize: 16,
 		flex: 1,
-		...sharedStyles.textRegular
-	},
-	queueToggleText: {
-		fontSize: 16,
-		flex: 1,
+		marginLeft: 12,
 		...sharedStyles.textRegular
 	},
 	dropdownContainer: {
@@ -58,11 +54,6 @@ export default StyleSheet.create({
 		flex: 1
 	},
 	sortIcon: {
-		width: 22,
-		height: 22,
-		marginHorizontal: 12
-	},
-	queueIcon: {
 		width: 22,
 		height: 22,
 		marginHorizontal: 12
@@ -126,7 +117,14 @@ export default StyleSheet.create({
 		height: StyleSheet.hairlineWidth,
 		marginLeft: 72
 	},
-	omnichannelToggle: {
-		marginRight: 12
+	directoryIcon: {
+		width: 22,
+		height: 22,
+		marginHorizontal: 12
+	},
+	directoryText: {
+		fontSize: 16,
+		flex: 1,
+		...sharedStyles.textRegular
 	}
 });

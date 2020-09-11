@@ -471,7 +471,7 @@ class RoomActionsView extends React.Component {
 		const { room: { rid } } = this.state;
 		showConfirmationAlert({
 			message: I18n.t('Would_you_like_to_return_the_inquiry'),
-			confirmationText: I18n.t('Yes'),
+			callToAction: I18n.t('Yes'),
 			onPress: async() => {
 				try {
 					await RocketChat.returnLivechat(rid);

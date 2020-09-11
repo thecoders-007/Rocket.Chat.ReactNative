@@ -129,7 +129,7 @@ class MessageBox extends Component {
 		this.options = [
 			{
 				title: I18n.t('Take_a_photo'),
-				icon: 'camera-photo',
+				icon: 'image',
 				onPress: this.takePhoto
 			},
 			{
@@ -139,7 +139,7 @@ class MessageBox extends Component {
 			},
 			{
 				title: I18n.t('Choose_from_library'),
-				icon: 'image',
+				icon: 'share',
 				onPress: this.chooseFromLibrary
 			},
 			{

@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import {
 	StyleSheet, FlatList, View, Text, Linking
 } from 'react-native';
+import RNUserDefaults from 'rn-user-defaults';
 
 import I18n from '../i18n';
 import { withTheme } from '../theme';
@@ -15,7 +16,6 @@ import { CustomIcon } from '../lib/Icons';
 import { DEFAULT_BROWSER_KEY } from '../utils/openLink';
 import { isIOS } from '../utils/deviceInfo';
 import SafeAreaView from '../containers/SafeAreaView';
-import UserPreferences from '../lib/userPreferences';
 import { logEvent, events } from '../utils/log';
 
 const DEFAULT_BROWSERS = [
@@ -81,8 +81,12 @@ class DefaultBrowserView extends React.Component {
 
 	async componentDidMount() {
 		this.mounted = true;
-		const browser = await UserPreferences.getStringAsync(DEFAULT_BROWSER_KEY);
-		this.setState({ browser });
+		try {
+			const browser = await RNUserDefaults.get(DEFAULT_BROWSER_KEY);
+			this.setState({ browser });
+		} catch {
+			// do nothing
+		}
 	}
 
 	init = () => {
@@ -113,7 +117,7 @@ class DefaultBrowserView extends React.Component {
 		logEvent(events.DB_CHANGE_DEFAULT_BROWSER, { browser: newBrowser });
 		try {
 			const browser = newBrowser !== 'inApp' ? newBrowser : null;
-			await UserPreferences.setStringAsync(DEFAULT_BROWSER_KEY, browser);
+			await RNUserDefaults.set(DEFAULT_BROWSER_KEY, browser);
 			this.setState({ browser });
 		} catch {
 			logEvent(events.DB_CHANGE_DEFAULT_BROWSER_F);

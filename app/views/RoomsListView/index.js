@@ -62,10 +62,8 @@ import { goRoom } from '../../utils/goRoom';
 import SafeAreaView from '../../containers/SafeAreaView';
 import Header, { getHeaderTitlePosition } from '../../containers/Header';
 import { withDimensions } from '../../dimensions';
-import { showErrorAlert, showConfirmationAlert } from '../../utils/info';
-
-import { getInquiryQueueSelector } from '../../ee/omnichannel/selectors/inquiry';
-import { changeLivechatStatus, isOmnichannelStatusAvailable } from '../../ee/omnichannel/lib';
+import { showErrorAlert } from '../../utils/info';
+import { getInquiryQueueSelector } from '../../selectors/inquiry';
 
 const INITIAL_NUM_TO_RENDER = isTablet ? 20 : 12;
 const CHATS_HEADER = 'Chats';
@@ -75,12 +73,10 @@ const DISCUSSIONS_HEADER = 'Discussions';
 const CHANNELS_HEADER = 'Channels';
 const DM_HEADER = 'Direct_Messages';
 const GROUPS_HEADER = 'Private_Groups';
-const OMNICHANNEL_HEADER = 'Open_Livechats';
 const QUERY_SIZE = 20;
 
 const filterIsUnread = s => (s.unread > 0 || s.alert) && !s.hideUnreadStatus;
 const filterIsFavorite = s => s.f;
-const filterIsOmnichannel = s => s.t === 'l';
 
 const shouldUpdateProps = [
 	'searchText',
@@ -113,9 +109,7 @@ class RoomsListView extends React.Component {
 		user: PropTypes.shape({
 			id: PropTypes.string,
 			username: PropTypes.string,
-			token: PropTypes.string,
-			statusLivechat: PropTypes.string,
-			roles: PropTypes.object
+			token: PropTypes.string
 		}),
 		server: PropTypes.string,
 		searchText: PropTypes.string,
@@ -378,12 +372,6 @@ class RoomsListView extends React.Component {
 						onPress={this.initSearching}
 						testID='rooms-list-view-search'
 					/>
-					<Item
-						title='directory'
-						iconName='directory'
-						onPress={this.goDirectory}
-						testID='rooms-list-view-directory'
-					/>
 				</CustomHeaderButtons>
 			))
 		};
@@ -419,8 +407,7 @@ class RoomsListView extends React.Component {
 			sortBy,
 			showUnread,
 			showFavorites,
-			groupByType,
-			user
+			groupByType
 		} = this.props;
 
 		const db = database.active;
@@ -457,6 +444,7 @@ class RoomsListView extends React.Component {
 				.observe();
 		}
 
+
 		this.querySubscription = observable.subscribe((data) => {
 			let tempChats = [];
 			let chats = data;
@@ -466,13 +454,6 @@ class RoomsListView extends React.Component {
 			 * RoomItem handles its own re-render
 			 */
 			const chatsOrder = data.map(item => item.rid);
-
-			const isOmnichannelAgent = user?.roles?.includes('livechat-agent');
-			if (isOmnichannelAgent) {
-				const omnichannel = chats.filter(s => filterIsOmnichannel(s));
-				chats = chats.filter(s => !filterIsOmnichannel(s));
-				tempChats = this.addRoomsGroup(omnichannel, OMNICHANNEL_HEADER, tempChats);
-			}
 
 			// unread
 			if (showUnread) {
@@ -498,7 +479,7 @@ class RoomsListView extends React.Component {
 				tempChats = this.addRoomsGroup(channels, CHANNELS_HEADER, tempChats);
 				tempChats = this.addRoomsGroup(privateGroup, GROUPS_HEADER, tempChats);
 				tempChats = this.addRoomsGroup(direct, DM_HEADER, tempChats);
-			} else if (showUnread || showFavorites || isOmnichannelAgent) {
+			} else if (showUnread || showFavorites) {
 				tempChats = this.addRoomsGroup(chats, CHATS_HEADER, tempChats);
 			} else {
 				tempChats = chats;
@@ -698,28 +679,7 @@ class RoomsListView extends React.Component {
 
 	goQueue = () => {
 		logEvent(events.RL_GO_QUEUE);
-		const {
-			navigation, isMasterDetail, queueSize, inquiryEnabled, user
-		} = this.props;
-
-		// if not-available, prompt to change to available
-		if (!isOmnichannelStatusAvailable(user)) {
-			showConfirmationAlert({
-				message: I18n.t('Omnichannel_enable_alert'),
-				confirmationText: I18n.t('Yes'),
-				onPress: async() => {
-					try {
-						await changeLivechatStatus();
-					} catch {
-						// Do nothing
-					}
-				}
-			});
-		}
-
-		if (!inquiryEnabled) {
-			return;
-		}
+		const { navigation, isMasterDetail, queueSize } = this.props;
 		// prevent navigation to empty list
 		if (!queueSize) {
 			return showErrorAlert(I18n.t('Queue_is_empty'), I18n.t('Oops'));
@@ -847,9 +807,7 @@ class RoomsListView extends React.Component {
 
 	renderListHeader = () => {
 		const { searching } = this.state;
-		const {
-			sortBy, queueSize, inquiryEnabled, user
-		} = this.props;
+		const { sortBy, queueSize, inquiryEnabled } = this.props;
 		return (
 			<ListHeader
 				searching={searching}
@@ -859,7 +817,6 @@ class RoomsListView extends React.Component {
 				goQueue={this.goQueue}
 				queueSize={queueSize}
 				inquiryEnabled={inquiryEnabled}
-				user={user}
 			/>
 		);
 	};

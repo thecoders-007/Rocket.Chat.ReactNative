@@ -5,7 +5,6 @@ import { isIOS } from './deviceInfo';
 import I18n from '../i18n';
 import { showErrorAlert } from './info';
 import { STORE_REVIEW_LINK } from '../constants/links';
-import { isFDroidBuild } from '../constants/environment';
 import { logEvent, events } from './log';
 
 const store = isIOS ? 'App Store' : 'Play Store';
@@ -88,14 +87,12 @@ class ReviewApp {
 	positiveEventCount = 0;
 
 	pushPositiveEvent = () => {
-		if (!isFDroidBuild) {
-			if (this.positiveEventCount >= numberOfPositiveEvent) {
-				return;
-			}
-			this.positiveEventCount += 1;
-			if (this.positiveEventCount === numberOfPositiveEvent) {
-				tryReview();
-			}
+		if (this.positiveEventCount >= numberOfPositiveEvent) {
+			return;
+		}
+		this.positiveEventCount += 1;
+		if (this.positiveEventCount === numberOfPositiveEvent) {
+			tryReview();
 		}
 	}
 }

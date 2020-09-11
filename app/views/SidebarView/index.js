@@ -19,7 +19,6 @@ import database from '../../lib/database';
 import { withTheme } from '../../theme';
 import { getUserSelector } from '../../selectors/login';
 import SafeAreaView from '../../containers/SafeAreaView';
-import Navigation from '../../lib/Navigation';
 
 const Separator = React.memo(({ theme }) => <View style={[styles.separator, { borderColor: themes[theme].separatorColor }]} />);
 Separator.propTypes = {
@@ -136,7 +135,8 @@ class Sidebar extends Component {
 
 	sidebarNavigate = (route) => {
 		logEvent(events[`SIDEBAR_GO_${ route.replace('StackNavigator', '').replace('View', '').toUpperCase() }`]);
-		Navigation.navigate(route);
+		const { navigation } = this.props;
+		navigation.navigate(route);
 	}
 
 	get currentItemKey() {

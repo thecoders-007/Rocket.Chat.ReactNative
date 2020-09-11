@@ -119,7 +119,7 @@ jobs:
       - save_cache: *save-npm-cache-linux
 
   # Android builds
-  android-play-build:
+  android-build:
     <<: *defaults
     docker:
       - image: circleci/android:api-28-node
@@ -150,7 +150,7 @@ jobs:
             # echo -e "android.enableAapt2=false" >> ./gradle.properties
             echo -e "android.useAndroidX=true" >> ./gradle.properties
             echo -e "android.enableJetifier=true" >> ./gradle.properties
-            echo -e "FLIPPER_VERSION=0.51.0" >> ./gradle.properties
+            echo -e "FLIPPER_VERSION=0.33.1" >> ./gradle.properties
 
             if [[ $KEYSTORE ]]; then
               echo $KEYSTORE_BASE64 | base64 --decode > ./app/$KEYSTORE
@@ -167,9 +167,7 @@ jobs:
       - run:
           name: Set Google Services
           command: |
-            if [[ $KEYSTORE ]]; then
-              echo $GOOGLE_SERVICES_ANDROID | base64 --decode > google-services.json
-            fi
+            cp google-services.prod.json google-services.json
           working_directory: android/app
 
       - run:
@@ -178,12 +176,12 @@ jobs:
             echo -e "export default { BUGSNAG_API_KEY: '$BUGSNAG_KEY' };" > ./config.js
 
       - run:
-          name: Build Android Play App
+          name: Build Android App
           command: |
             if [[ $KEYSTORE ]]; then
-              bundle exec fastlane android playRelease
+              bundle exec fastlane android release
             else
-              bundle exec fastlane android playBuild
+              bundle exec fastlane android build
             fi
           working_directory: android
 
@@ -194,8 +192,8 @@ jobs:
               yarn generate-source-maps-android upload \
                 --api-key=$BUGSNAG_KEY \
                 --app-version=$CIRCLE_BUILD_NUM \
-                --minifiedFile=android/app/build/generated/assets/react/play/release/app.bundle \
-                --source-map=android/app/build/generated/sourcemaps/react/play/release/app.bundle.map \
+                --minifiedFile=android/app/build/generated/assets/react/release/app.bundle \
+                --source-map=android/app/build/generated/sourcemaps/react/release/app.bundle.map \
                 --minified-url=app.bundle \
                 --upload-sources
             fi
@@ -213,68 +211,7 @@ jobs:
             - android/fastlane/report.xml
             - android/app/build/outputs
 
-  android-foss-build:
-    <<: *defaults
-    docker:
-      - image: circleci/android:api-28-node
-
-    environment:
-      JAVA_OPTS: '-Xms512m -Xmx2g'
-      GRADLE_OPTS: '-Xmx3g -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs="-Xmx2g -XX:+HeapDumpOnOutOfMemoryError"'
-      TERM: dumb
-      <<: *bash-env
-
-    steps:
-      - checkout
-
-      - run: *install-node
-
-      - restore_cache: *restore-npm-cache-linux
-
-      - run: *install-npm-modules
-
-      - run: *update-fastlane-android
-
-      - restore_cache: *restore-gradle-cache
-
-      - run:
-          name: Configure Gradle
-          command: |
-            echo -e "" > ./gradle.properties
-            # echo -e "android.enableAapt2=false" >> ./gradle.properties
-            echo -e "android.useAndroidX=true" >> ./gradle.properties
-            echo -e "android.enableJetifier=true" >> ./gradle.properties
-            echo -e "FLIPPER_VERSION=0.51.0" >> ./gradle.properties
-            echo -e "VERSIONCODE=$CIRCLE_BUILD_NUM" >> ./gradle.properties
-
-            if [[ $KEYSTORE ]]; then
-              echo $KEYSTORE_BASE64 | base64 --decode > ./app/$KEYSTORE
-              echo -e "KEYSTORE=$KEYSTORE" >> ./gradle.properties
-              echo -e "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> ./gradle.properties
-              echo -e "KEY_ALIAS=$KEY_ALIAS" >> ./gradle.properties
-              echo -e "KEY_PASSWORD=$KEYSTORE_PASSWORD" >> ./gradle.properties
-            fi
-          working_directory: android
-
-      - run:
-          name: Build Android Foss App
-          command: bundle exec fastlane android fossRelease
-          working_directory: android
-
-      - store_artifacts:
-          path: android/app/build/outputs
-
-      - save_cache: *save-npm-cache-linux
-
-      - save_cache: *save-gradle-cache
-
-      - persist_to_workspace:
-          root: .
-          paths:
-            - android/fastlane/report.xml
-            - android/app/build/outputs
-
-  android-google-play-beta:
+  android-google-play-alpha:
     <<: *defaults
     docker:
       - image: circleci/android:api-28-node
@@ -294,7 +231,7 @@ jobs:
 
       - run:
           name: Fastlane Play Store Upload
-          command: bundle exec fastlane android beta
+          command: bundle exec fastlane android alpha
           working_directory: android
 
   # iOS builds
@@ -317,9 +254,7 @@ jobs:
       - run:
           name: Set Google Services
           command: |
-            if [[ $KEYSTORE ]]; then
-              echo $GOOGLE_SERVICES_REACTNATIVE | base64 --decode > GoogleService-Info.plist
-            fi
+            cp GoogleService-Info.prod.plist GoogleService-Info.plist
           working_directory: ios
 
       - run:
@@ -402,20 +337,13 @@ workflows:
           requires:
             - ios-hold-testflight
 
-      - android-play-build:
+      - android-build:
           requires:
             - lint-testunit
-      - android-hold-google-play-beta:
+      - android-hold-google-play-alpha:
           type: approval
           requires:
-            - android-play-build
-      - android-google-play-beta:
+            - android-build
+      - android-google-play-alpha:
           requires:
-            - android-hold-google-play-beta
-      - android-hold-foss-build:
-          type: approval
-          requires:
-            - lint-testunit
-      - android-foss-build:
-          requires:
-            - android-hold-foss-build
+            - android-hold-google-play-alpha

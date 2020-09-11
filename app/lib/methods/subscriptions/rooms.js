@@ -23,8 +23,10 @@ let connectedListener;
 let disconnectedListener;
 let streamListener;
 let subServer;
-let queue = {};
+let subQueue = {};
 let subTimer = null;
+let roomQueue = {};
+let roomTimer = null;
 const WINDOW_TIME = 500;
 
 const createOrUpdateSubscription = async(subscription, room) => {
@@ -191,38 +193,36 @@ const createOrUpdateSubscription = async(subscription, room) => {
 	}
 };
 
-const getSubQueueId = rid => `SUB-${ rid }`;
-
-const getRoomQueueId = rid => `ROOM-${ rid }`;
-
-const debouncedUpdate = (subscription) => {
+const debouncedUpdateSub = (subscription) => {
 	if (!subTimer) {
 		subTimer = setTimeout(() => {
-			const batch = queue;
-			queue = {};
+			const subBatch = subQueue;
+			subQueue = {};
 			subTimer = null;
-			Object.keys(batch).forEach((key) => {
+			Object.keys(subBatch).forEach((key) => {
 				InteractionManager.runAfterInteractions(() => {
-					if (batch[key]) {
-						if (/SUB/.test(key)) {
-							const sub = batch[key];
-							const roomQueueId = getRoomQueueId(sub.rid);
-							const room = batch[roomQueueId];
-							delete batch[roomQueueId];
-							createOrUpdateSubscription(sub, room);
-						} else {
-							const room = batch[key];
-							const subQueueId = getSubQueueId(room._id);
-							const sub = batch[subQueueId];
-							delete batch[subQueueId];
-							createOrUpdateSubscription(sub, room);
-						}
-					}
+					createOrUpdateSubscription(subBatch[key]);
 				});
 			});
 		}, WINDOW_TIME);
 	}
-	queue[subscription.rid ? getSubQueueId(subscription.rid) : getRoomQueueId(subscription._id)] = subscription;
+	subQueue[subscription.rid] = subscription;
+};
+
+const debouncedUpdateRoom = (room) => {
+	if (!roomTimer) {
+		roomTimer = setTimeout(() => {
+			const roomBatch = roomQueue;
+			roomQueue = {};
+			roomTimer = null;
+			Object.keys(roomBatch).forEach((key) => {
+				InteractionManager.runAfterInteractions(() => {
+					createOrUpdateSubscription(null, roomBatch[key]);
+				});
+			});
+		}, WINDOW_TIME);
+	}
+	roomQueue[room._id] = room;
 };
 
 export default function subscribeRooms() {
@@ -244,9 +244,7 @@ export default function subscribeRooms() {
 		const [, ev] = ddpMessage.fields.eventName.split('/');
 		if (/userData/.test(ev)) {
 			const [{ diff }] = ddpMessage.fields.args;
-			if (diff?.statusLivechat) {
-				store.dispatch(setUser({ statusLivechat: diff.statusLivechat }));
-			}
+			store.dispatch(setUser({ statusLivechat: diff?.statusLivechat }));
 		}
 		if (/subscriptions/.test(ev)) {
 			if (type === 'removed') {
@@ -280,12 +278,12 @@ export default function subscribeRooms() {
 					log(e);
 				}
 			} else {
-				debouncedUpdate(data);
+				debouncedUpdateSub(data);
 			}
 		}
 		if (/rooms/.test(ev)) {
 			if (type === 'updated' || type === 'inserted') {
-				debouncedUpdate(data);
+				debouncedUpdateRoom(data);
 			}
 		}
 		if (/message/.test(ev)) {
@@ -348,10 +346,15 @@ export default function subscribeRooms() {
 			streamListener.then(removeListener);
 			streamListener = false;
 		}
-		queue = {};
+		subQueue = {};
+		roomQueue = {};
 		if (subTimer) {
 			clearTimeout(subTimer);
 			subTimer = false;
+		}
+		if (roomTimer) {
+			clearTimeout(roomTimer);
+			roomTimer = false;
 		}
 	};
 
