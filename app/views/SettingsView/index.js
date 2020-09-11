@@ -6,7 +6,6 @@ import PropTypes from 'prop-types';
 import { connect } from 'react-redux';
 import AsyncStorage from '@react-native-community/async-storage';
 import FastImage from '@rocket.chat/react-native-fast-image';
-import CookieManager from '@react-native-community/cookies';
 
 import { logout as logoutAction } from '../../actions/login';
 import { selectServerRequest as selectServerRequestAction } from '../../actions/server';
@@ -30,20 +29,15 @@ import styles from './styles';
 import {
 	loggerConfig, analytics, logEvent, events
 } from '../../utils/log';
-import {
-	PLAY_MARKET_LINK, FDROID_MARKET_LINK, APP_STORE_LINK, LICENSE_LINK
-} from '../../constants/links';
+import { PLAY_MARKET_LINK, APP_STORE_LINK, LICENSE_LINK } from '../../constants/links';
 import { withTheme } from '../../theme';
 import SidebarView from '../SidebarView';
 import { LISTENER } from '../../containers/Toast';
 import EventEmitter from '../../utils/events';
 import { appStart as appStartAction, ROOT_LOADING } from '../../actions/app';
 import { onReviewPress } from '../../utils/review';
-import SafeAreaView from '../../containers/SafeAreaView';
-import database from '../../lib/database';
-import { isFDroidBuild } from '../../constants/environment';
 import { getUserSelector } from '../../selectors/login';
-
+import SafeAreaView from '../../containers/SafeAreaView';
 
 const SectionSeparator = React.memo(({ theme }) => (
 	<View
@@ -72,7 +66,7 @@ class SettingsView extends React.Component {
 
 	static propTypes = {
 		navigation: PropTypes.object,
-		server: PropTypes.object,
+		server:	PropTypes.object,
 		allowCrashReport: PropTypes.bool,
 		toggleCrashReport: PropTypes.func,
 		theme: PropTypes.string,
@@ -81,45 +75,27 @@ class SettingsView extends React.Component {
 		selectServerRequest: PropTypes.func,
 		user: PropTypes.shape({
 			roles: PropTypes.array,
-			id: PropTypes.string
+			statusLivechat: PropTypes.string
 		}),
 		appStart: PropTypes.func
 	}
 
-	checkCookiesAndLogout = async() => {
-		const { logout, user } = this.props;
-		const db = database.servers;
-		const usersCollection = db.collections.get('users');
-		try {
-			const userRecord = await usersCollection.find(user.id);
-			if (!userRecord.loginEmailPassword) {
-				showConfirmationAlert({
-					title: I18n.t('Clear_cookies_alert'),
-					message: I18n.t('Clear_cookies_desc'),
-					confirmationText: I18n.t('Clear_cookies_yes'),
-					dismissText: I18n.t('Clear_cookies_no'),
-					onPress: async() => {
-						await CookieManager.clearAll(true);
-						logout();
-					},
-					onCancel: () => {
-						logout();
-					}
-				});
-			} else {
-				logout();
-			}
-		} catch {
-			// Do nothing: user not found
-		}
+	get showLivechat() {
+		const { user } = this.props;
+		const { roles } = user;
+
+		return roles?.includes('livechat-agent');
 	}
 
 	handleLogout = () => {
 		logEvent(events.SE_LOG_OUT);
 		showConfirmationAlert({
 			message: I18n.t('You_will_be_logged_out_of_this_application'),
-			confirmationText: I18n.t('Logout'),
-			onPress: this.checkCookiesAndLogout
+			callToAction: I18n.t('Logout'),
+			onPress: () => {
+				const { logout } = this.props;
+				logout();
+			}
 		});
 	}
 
@@ -127,7 +103,7 @@ class SettingsView extends React.Component {
 		logEvent(events.SE_CLEAR_LOCAL_SERVER_CACHE);
 		showConfirmationAlert({
 			message: I18n.t('This_will_clear_all_your_offline_data'),
-			confirmationText: I18n.t('Clear'),
+			callToAction: I18n.t('Clear'),
 			onPress: async() => {
 				const {
 					server: { server }, appStart, selectServerRequest
@@ -146,14 +122,20 @@ class SettingsView extends React.Component {
 		AsyncStorage.setItem(CRASH_REPORT_KEY, JSON.stringify(value));
 		const { toggleCrashReport } = this.props;
 		toggleCrashReport(value);
-		if (!isFDroidBuild) {
-			loggerConfig.autoNotify = value;
-			analytics().setAnalyticsCollectionEnabled(value);
-			if (value) {
-				loggerConfig.clearBeforeSendCallbacks();
-			} else {
-				loggerConfig.registerBeforeSendCallback(() => false);
-			}
+		loggerConfig.autoNotify = value;
+		analytics().setAnalyticsCollectionEnabled(value);
+		if (value) {
+			loggerConfig.clearBeforeSendCallbacks();
+		} else {
+			loggerConfig.registerBeforeSendCallback(() => false);
+		}
+	}
+
+	toggleLivechat = async() => {
+		try {
+			await RocketChat.changeLivechatStatus();
+		} catch {
+			// Do nothing
 		}
 	}
 
@@ -180,16 +162,8 @@ class SettingsView extends React.Component {
 	}
 
 	shareApp = () => {
-		let message;
-		if (isAndroid) {
-			message = PLAY_MARKET_LINK;
-			if (isFDroidBuild) {
-				message = FDROID_MARKET_LINK;
-			}
-		} else {
-			message = APP_STORE_LINK;
-		}
-		Share.share({ message });
+		logEvent(events.SE_SHARE_THIS_APP);
+		Share.share({ message: isAndroid ? PLAY_MARKET_LINK : APP_STORE_LINK });
 	}
 
 	copyServerVersion = () => {
@@ -226,6 +200,18 @@ class SettingsView extends React.Component {
 				value={allowCrashReport}
 				trackColor={SWITCH_TRACK_COLOR}
 				onValueChange={this.toggleCrashReport}
+			/>
+		);
+	}
+
+	renderLivechatSwitch = () => {
+		const { user } = this.props;
+		const { statusLivechat } = user;
+		return (
+			<Switch
+				value={statusLivechat === 'available'}
+				trackColor={SWITCH_TRACK_COLOR}
+				onValueChange={this.toggleLivechat}
 			/>
 		);
 	}
@@ -276,18 +262,14 @@ class SettingsView extends React.Component {
 						theme={theme}
 					/>
 					<Separator theme={theme} />
-					{!isFDroidBuild ? (
-						<>
-							<ListItem
-								title={I18n.t('Review_this_app')}
-								showActionIndicator
-								onPress={onReviewPress}
-								testID='settings-view-review-app'
-								right={this.renderDisclosure}
-								theme={theme}
-							/>
-						</>
-					) : null}
+					<ListItem
+						title={I18n.t('Review_this_app')}
+						showActionIndicator
+						onPress={onReviewPress}
+						testID='settings-view-review-app'
+						right={this.renderDisclosure}
+						theme={theme}
+					/>
 					<Separator theme={theme} />
 					<ListItem
 						title={I18n.t('Share_this_app')}
@@ -354,21 +336,29 @@ class SettingsView extends React.Component {
 
 					<SectionSeparator theme={theme} />
 
-					{!isFDroidBuild ? (
+					{this.showLivechat ? (
 						<>
 							<ListItem
-								title={I18n.t('Send_crash_report')}
-								testID='settings-view-crash-report'
-								right={() => this.renderCrashReportSwitch()}
+								title={I18n.t('Omnichannel')}
+								testID='settings-view-livechat'
+								right={() => this.renderLivechatSwitch()}
 								theme={theme}
 							/>
-							<Separator theme={theme} />
-							<ItemInfo
-								info={I18n.t('Crash_report_disclaimer')}
-								theme={theme}
-							/>
+							<SectionSeparator theme={theme} />
 						</>
 					) : null}
+
+					<ListItem
+						title={I18n.t('Send_crash_report')}
+						testID='settings-view-crash-report'
+						right={() => this.renderCrashReportSwitch()}
+						theme={theme}
+					/>
+					<Separator theme={theme} />
+					<ItemInfo
+						info={I18n.t('Crash_report_disclaimer')}
+						theme={theme}
+					/>
 
 					<Separator theme={theme} />
 					<ListItem

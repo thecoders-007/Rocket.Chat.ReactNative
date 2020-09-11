@@ -16,9 +16,7 @@ import activeUsers from './activeUsers';
 import usersTyping from './usersTyping';
 import inviteLinks from './inviteLinks';
 import createDiscussion from './createDiscussion';
-import enterpriseModules from './enterpriseModules';
-
-import inquiry from '../ee/omnichannel/reducers/inquiry';
+import inquiry from './inquiry';
 
 export default combineReducers({
 	settings,
@@ -38,6 +36,5 @@ export default combineReducers({
 	usersTyping,
 	inviteLinks,
 	createDiscussion,
-	inquiry,
-	enterpriseModules
+	inquiry
 });

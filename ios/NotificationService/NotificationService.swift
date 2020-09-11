@@ -60,30 +60,8 @@ class NotificationService: UNNotificationServiceExtension {
                 return
             }
           
-            let mmapID = "default"
-            let instanceID = "com.MMKV.\(mmapID)"
-            let secureStorage = SecureStorage()
-            var cryptKey: Data = Data()
-            // get mmkv instance password from keychain
-            secureStorage.getSecureKey(instanceID.toHex()) { (response) -> () in
-              guard let password = response?[1] as? String else {
-                // kill the process and show notification as it came from APN
-                exit(0)
-              }
-              cryptKey = password.data(using: .utf8)!
-            }
-
-            // Get App Group directory
             let suiteName = Bundle.main.object(forInfoDictionaryKey: "AppGroup") as! String
-            guard let directory = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: suiteName) else {
-              return
-            }
-
-            // Set App Group dir
-            MMKV.initialize(rootDir: nil, groupDir: directory.path, logLevel: MMKVLogLevel.none)
-            guard let mmkv = MMKV(mmapID: mmapID, cryptKey: cryptKey, mode: MMKVMode.multiProcess) else {
-                return
-            }
+            let userDefaults = UserDefaults(suiteName: suiteName)
 
             var server = data.host
             if (server.last == "/") {
@@ -91,8 +69,8 @@ class NotificationService: UNNotificationServiceExtension {
             }
             let msgId = data.messageId
 
-            let userId = mmkv.string(forKey: "reactnativemeteor_usertoken-\(server)") ?? ""
-            let token = mmkv.string(forKey: "reactnativemeteor_usertoken-\(userId)") ?? ""
+            let userId = userDefaults?.string(forKey: "reactnativemeteor_usertoken-\(server)") ?? ""
+            let token = userDefaults?.string(forKey: "reactnativemeteor_usertoken-\(userId)") ?? ""
           
             if userId.isEmpty || token.isEmpty {
                 contentHandler(bestAttemptContent)

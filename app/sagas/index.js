@@ -10,8 +10,7 @@ import state from './state';
 import deepLinking from './deepLinking';
 import inviteLinks from './inviteLinks';
 import createDiscussion from './createDiscussion';
-
-import inquiry from '../ee/omnichannel/sagas/inquiry';
+import inquiry from './inquiry';
 
 const root = function* root() {
 	yield all([

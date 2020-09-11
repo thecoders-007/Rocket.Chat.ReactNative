@@ -1,6 +1,7 @@
 import {
 	put, call, takeLatest, select, take, fork, cancel, race, delay
 } from 'redux-saga/effects';
+import RNUserDefaults from 'rn-user-defaults';
 import { sanitizedRaw } from '@nozbe/watermelondb/RawRecord';
 import moment from 'moment';
 import 'moment/min/locales';
@@ -14,6 +15,7 @@ import {
 	loginFailure, loginSuccess, setUser, logout
 } from '../actions/login';
 import { roomsRequest } from '../actions/rooms';
+import { inquiryRequest } from '../actions/inquiry';
 import { toMomentLocale } from '../utils/moment';
 import RocketChat from '../lib/rocketchat';
 import log, { logEvent, events } from '../utils/log';
@@ -24,10 +26,6 @@ import { inviteLinksRequest } from '../actions/inviteLinks';
 import { showErrorAlert } from '../utils/info';
 import { localAuthenticate } from '../utils/localAuthentication';
 import { setActiveUsers } from '../actions/activeUsers';
-import UserPreferences from '../lib/userPreferences';
-
-import { inquiryRequest, inquiryReset } from '../ee/omnichannel/actions/inquiry';
-import { isOmnichannelStatusAvailable } from '../ee/omnichannel/lib';
 
 const getServer = state => state.server.server;
 const loginWithPasswordCall = args => RocketChat.loginWithPassword(args);
@@ -87,30 +85,22 @@ const fetchUsersPresence = function* fetchUserPresence() {
 	RocketChat.subscribeUsersPresence();
 };
 
-const fetchEnterpriseModules = function* fetchEnterpriseModules({ user }) {
-	yield RocketChat.getEnterpriseModules();
-
-	if (isOmnichannelStatusAvailable(user) && RocketChat.isOmnichannelModuleAvailable()) {
-		yield put(inquiryRequest());
-	}
-};
-
 const handleLoginSuccess = function* handleLoginSuccess({ user }) {
 	try {
 		const adding = yield select(state => state.server.adding);
-		yield UserPreferences.setStringAsync(RocketChat.TOKEN_KEY, user.token);
+		yield RNUserDefaults.set(RocketChat.TOKEN_KEY, user.token);
 
 		RocketChat.getUserPresence(user.id);
 
 		const server = yield select(getServer);
 		yield put(roomsRequest());
+		yield put(inquiryRequest());
 		yield fork(fetchPermissions);
 		yield fork(fetchCustomEmojis);
 		yield fork(fetchRoles);
 		yield fork(fetchSlashCommands);
 		yield fork(registerPushToken);
 		yield fork(fetchUsersPresence);
-		yield fork(fetchEnterpriseModules, { user });
 
 		I18n.locale = user.language;
 		moment.locale(toMomentLocale(user.language));
@@ -124,13 +114,11 @@ const handleLoginSuccess = function* handleLoginSuccess({ user }) {
 			language: user.language,
 			status: user.status,
 			statusText: user.statusText,
-			roles: user.roles,
-			loginEmailPassword: user.loginEmailPassword
+			roles: user.roles
 		};
 		yield serversDB.action(async() => {
 			try {
 				const userRecord = await usersCollection.find(user.id);
-				u.loginEmailPassword = userRecord?.loginEmailPassword;
 				await userRecord.update((record) => {
 					record._raw = sanitizedRaw({ id: user.id, ...record._raw }, usersCollection.schema);
 					Object.assign(record, u);
@@ -143,8 +131,8 @@ const handleLoginSuccess = function* handleLoginSuccess({ user }) {
 			}
 		});
 
-		yield UserPreferences.setStringAsync(`${ RocketChat.TOKEN_KEY }-${ server }`, user.id);
-		yield UserPreferences.setStringAsync(`${ RocketChat.TOKEN_KEY }-${ user.id }`, user.token);
+		yield RNUserDefaults.set(`${ RocketChat.TOKEN_KEY }-${ server }`, user.id);
+		yield RNUserDefaults.set(`${ RocketChat.TOKEN_KEY }-${ user.id }`, user.token);
 		yield put(setUser(user));
 		EventEmitter.emit('connected');
 
@@ -194,10 +182,9 @@ const handleLogout = function* handleLogout({ forcedByServer }) {
 				if (servers.length > 0) {
 					for (let i = 0; i < servers.length; i += 1) {
 						const newServer = servers[i].id;
-						const token = yield UserPreferences.getStringAsync(`${ RocketChat.TOKEN_KEY }-${ newServer }`);
+						const token = yield RNUserDefaults.get(`${ RocketChat.TOKEN_KEY }-${ newServer }`);
 						if (token) {
-							yield put(selectServerRequest(newServer));
-							return;
+							return yield put(selectServerRequest(newServer));
 						}
 					}
 				}
@@ -222,12 +209,8 @@ const handleSetUser = function* handleSetUser({ user }) {
 		yield put(setActiveUsers({ [userId]: user }));
 	}
 
-	if (user?.statusLivechat && RocketChat.isOmnichannelModuleAvailable()) {
-		if (isOmnichannelStatusAvailable(user)) {
-			yield put(inquiryRequest());
-		} else {
-			yield put(inquiryReset());
-		}
+	if (user && user.statusLivechat) {
+		yield put(inquiryRequest());
 	}
 };
 
